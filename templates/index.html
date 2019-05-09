@@ -1,0 +1,122 @@
+{% extends "bootstrap/base.html" %}
+{% block styles %}
+{{ super() }}
+{% endblock %}
+{% block scripts %}
+{{ super() }}
+{{ moment.include_moment() }}
+<script>
+$("#median").click(function() {
+    $.ajax({
+        type: "GET",
+        url: "/medianize",
+        xhrFields: { withCredentials: true },
+        beforeSend: function() {
+            $("#median").prop('disabled', true);
+        },
+        success: function(result) {
+            $("img").attr('src', result);
+            $("#median").prop('disabled', false);
+        },
+    })
+});
+
+$("#rm-noise").click(function() {
+    $.ajax({
+        type: "POST",
+        url: "/rm-noise",
+        data: {
+		    rm_noise_method: $('input:checked').val(),
+            mono_points: $('#monotone').val(),
+        },
+        xhrFields: { withCredentials: true },
+        beforeSend: function() {
+            $("#rm-noise").prop('disabled', true);
+        },
+        success: function(result) {
+            $("img").attr('src', result);
+            $("#rm-noise").prop('disabled', false);
+        },
+    })
+});
+
+$('#run-task').click(function() {
+    $.ajax({
+        type: 'POST',
+        url: '/longtask',
+        beforeSend: function() {
+            $('.alert').removeClass('d-none');
+            $("#run-task").prop('disabled', true);
+        },
+        success: function(data, status, request) {
+            status_url = request.getResponseHeader('Location');
+            update_progress(status_url);
+        },
+        error: function() {
+            alert('Unexpected error');
+        }
+    })
+});
+
+function update_progress(status_url) {
+    $.getJSON(status_url, function(data) {
+        if ((data['state'] != 'PENDING') && ('result' in data)) {
+                // show result
+                $('.alert').text('Success');
+                $("#run-task").prop('disabled', false);
+        }
+        else {
+            setTimeout(function() {
+			    var today = new Date();
+				var hour = today.getHours();
+				var mins = today.getMinutes();
+				var secs = today.getSeconds();
+				if (secs <= 9) {
+				    secs = "0" + secs
+				}
+				var TotalTime = hour + ":" + mins + ":" + secs;
+                $('.alert').text(TotalTime + ' Progressing...');
+                update_progress(status_url);
+            }, 10000);
+        }
+    });
+}
+</script>
+{% endblock %}
+{% block content %}
+<h1>Emittance Reconstruction</h1>
+<ul class="list-group">
+    <li class="list-group-item">
+        <a href="{{ url_for('upload_file') }}">Upload profiles</a>
+    </li>
+    <li class="list-group-item">
+        <input type="button" id="median" value="Median">
+    </li>
+    <li class="list-group-item ">
+	    <h5>Noise reduce</h5>
+	    <div class="form-group">
+			<div class="radio">
+				<label><input type="radio" name="optradio" checked value="0">Gauss Fit</label>
+			</div>
+			<div class="radio">
+				<label><input type="radio" name="optradio" value="1">3rms</label>
+			</div>		
+			<div class="radio form-inline">
+				<label><input type="radio" name="optradio" value="2">Continuous Increase/Descrease</label>
+				<input id="monotone" type="text" style="margin-left: 5px" class="form-control" value="7"/>
+			</div>
+		</div>
+        <span class="input-group-btn">
+            <button id="rm-noise" class="btn btn-default" type="button">Remove Noise</button>
+        </span>
+    </li>
+    <li class="list-group-item">
+        <button id="run-task" class="btn btn-default" type="button">Run</button>
+    </li>
+</ul>
+<div class="alert alert-info d-none">
+</div>
+{% if if_exist %}
+<div id="show_area"><img src="{{ graph }}"></img></div>
+{% endif %}
+{% endblock %}
