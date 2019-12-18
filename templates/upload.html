@@ -1,7 +1,17 @@
-<!doctype html>
-    <title>Upload new Files</title>
-    <h1>Upload new Files</h1>
-    <form method=post enctype=multipart/form-data>
-      <input type=file name=file[] multiple=''>
-      <input type=submit value=Upload>
-    </form>
+{% extends "bootstrap/base.html" %}
+{% block styles %}
+{{ super() }}
+{% endblock %}
+{% block scripts %}
+{{ super() }}
+{{ moment.include_moment() }}
+{% endblock %}
+{% block content %}
+<title>Upload new Files</title>
+<h1>Upload new Files</h1>
+<form method=post enctype=multipart/form-data>
+    <input type=file name=file[] multiple=''>
+    <input type=submit value=Upload>
+</form>
+{% endblock %}
+

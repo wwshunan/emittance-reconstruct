@@ -1,0 +1,376 @@
+{% extends "bootstrap/base.html" %}
+{% block styles %}
+{{ super() }}
+{% endblock %}
+{% block scripts %}
+{{ super() }}
+{{ moment.include_moment() }}
+<script type="text/javascript" async
+        src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-MML-AM_CHTML" async>
+</script>
+<script src="{{ url_for('static', filename='bootstrap-input-spinner-master/src/bootstrap-input-spinner.js') }}">
+</script>
+<script>
+    $("input[type='number']").inputSpinner()
+</script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    extensions: ["tex2jax.js"],
+    jax: ["input/TeX", "output/HTML-CSS"],
+    tex2jax: {
+      inlineMath: [ ['$','$'], ["\\(","\\)"] ],
+      displayMath: [ ['$$','$$'], ["\\[","\\]"] ],
+      processEscapes: true
+    },
+    displayAlign: "left",
+    "HTML-CSS": { availableFonts: ["TeX"] }
+  });
+</script>
+{{ moment.include_moment() }}
+<script>
+$("#rm-noise").click(function() {
+	$.ajax({
+		type: "POST",
+		url: "/rm-direct-emit-noise",
+		xhrFields: { withCredentials: true },
+		//beforeSend: function() {
+		//	$("#rm-noise").prop('disabled', true);
+		//},
+		success: function(result) {
+			$("img").attr('src', result);
+			//$("#rm-isolate-noise").prop('disabled', false);
+		},
+	})
+});
+
+$("#rm-isolate-noise").click(function() {
+	$.ajax({
+		type: "POST",
+		url: "/rm-isolate-noise",
+		data: {
+		direction: $('input[name=lineselect]:checked').val(),
+			x1: $('#x1').val(),
+			y1: $('#y1').val(),
+			x2: $('#x2').val(),
+			y2: $('#y2').val(),
+		},
+		xhrFields: { withCredentials: true },
+		success: function(result) {
+			$("img").attr('src', result);
+			$("#twiss").prop('disabled', false);
+		},
+	})
+});
+
+$("#twiss").click(function() {
+	$.ajax({
+		type: "POST",
+		url: "/twiss-parameters",
+		data: {
+			gamma: $('#gamma').val(),
+			distance: $('#distance').val(),
+		},
+		xhrFields: { withCredentials: true },
+		success: function(result) {
+			$(".alert").html(result)
+			if (typeof MathJax !== 'undefined') {
+				MathJax.Hub.Queue(["Typeset", MathJax.Hub]);
+			}
+		},
+	})
+});
+
+function update_progress(status_url) {
+    $.getJSON(status_url, function(data) {
+        if ((data['state'] != 'PENDING') && ('result' in data)) {
+						$(".alert").html(data['result'])
+						if (typeof MathJax !== 'undefined') {
+								MathJax.Hub.Queue(["Typeset", MathJax.Hub]);
+						}
+        }
+        else {
+            setTimeout(function() {
+			    var today = new Date();
+				var hour = today.getHours();
+				var mins = today.getMinutes();
+				var secs = today.getSeconds();
+				if (secs <= 9) {
+				    secs = "0" + secs
+				}
+				var TotalTime = hour + ":" + mins + ":" + secs;
+                $('.alert').text(TotalTime + ' Progressing...');
+                update_progress(status_url);
+            }, 5000);
+        }
+    });
+}
+
+$("#directRecst").click(function() {
+	$.ajax({
+			type: "POST",
+			url: "/direct-reconstruct",
+			data: {
+					partType: $('#partType').val(),
+					current: $('#current').val(),
+					partNum: $('#partNum').val(),
+					gamma: $('#gm').val(),
+					emitx: $('#emitx').val(),
+					alpx: $('#alpx').val(),
+					betx: $('#betx').val(),
+					emity: $('#emity').val(),
+					alpy: $('#alpy').val(),
+					bety: $('#bety').val(),
+					q1: $('#q1').val(),
+					q2: $('#q2').val(),
+					q3: $('#q3').val(),
+			},
+			xhrFields: { withCredentials: true },
+
+			success: function(data, status, request) {
+					status_url = request.getResponseHeader('Location');
+					update_progress(status_url);
+			},
+	})
+});
+
+$("#docs").on("click", function () {
+	$("#manual").toggle();
+});
+
+$("#showMinMaxInput").on("change", function () {
+	$("#customTrunc").toggle();
+});
+
+$("#showLine").on("change", function () {
+	$("#lineTrunc").toggle()
+});
+
+var $minInput = $("#minInput");
+var $maxInput = $("#maxInput");
+var $stepInput = $("#stepInput");
+var $dataDecimalsInput = $("#dataDecimalsInput");
+var $minMaxInput = $("#minMaxInput");
+
+$minInput.on("change", function (event) {
+	$minMaxInput.attr("min", $minInput.val())
+});
+
+$maxInput.on("change", function (event) {
+	$minMaxInput.attr("max", $maxInput.val())
+});
+
+$stepInput.on("change", function (event) {
+	$minMaxInput.attr("step", $stepInput.val())
+});
+
+$dataDecimalsInput.on("change", function (event) {
+	$minMaxInput.attr("data-decimals", $dataDecimalsInput.val())
+});
+
+$minMaxInput.on("change", function (event) {
+	var value = $minMaxInput.val();
+	$.ajax({
+		type: "POST",
+		url: "/noise-trunc",
+		data: {
+			noiseLimit: value
+		},
+		xhrFields: { withCredentials: true },
+		success: function(result) {
+			$("img").attr('src', result);
+			$("#twiss").prop('disabled', false);
+		},
+	})
+});
+
+</script>
+{% endblock %}
+{% block content %}
+<div class="container-fluid">
+	<h2 style="text-align: center">Direct Emittance Process</h2>
+	<div class="row">
+		<div class="col-sm-6">
+			<form class="form-horizontal">
+			<div class="form-group">
+					<a href="{{ url_for('upload_file', kind='direct-emit') }}">Upload Direct Emittance Data</a>
+			</div>
+			<div class="form-group form-row">
+				<span class="input-group-btn">
+					{% if disable_rm_btn %}
+						<button id="rm-noise" class="btn btn-default" type="button" disabled>Noise Remove</button>
+					{% else %}
+						<button id="rm-noise" class="btn btn-default" type="button">Noise Remove</button>
+					{% endif %}
+				</span>
+				<p class="my-auto ml-1">Automatic noise removal</p>
+			</div>
+			<div class="form-group form-check">
+				<input type="checkbox"  class="form-check-input" id="showMinMaxInput">
+				<label class="form-check-label" for="showMinMaxInput">User Defined Noise Truncation</label>
+			</div>
+
+			<div class="form-group" id="customTrunc" style="display: none">
+				<label for="minMaxInput">Noise Truncation</label>
+				<div class="form-row mb-2">
+					<div class="col-sm-2">
+						<label for="minInput">min</label>
+						<input id="minInput" type="text" class="form-control test-value-input" value="{{ minInput }}">
+					</div>
+					<div class="col-sm-2">
+						<label for="maxInput">max</label>
+						<input id="maxInput" type="text" class="form-control test-value-input" value="{{ maxInput }}">
+					</div>
+					<div class="col-sm-2">
+						<label for="stepInput">step</label>
+						<input id="stepInput" type="text" class="form-control test-value-input" value="{{ step }}">
+					</div>
+					<div class="col-sm-2">
+						<label for="dataDecimalsInput">data-decimals</label>
+						<input id="dataDecimalsInput" type="text" class="form-control test-value-input"
+									 value="{{ decimals }}">
+						</div>
+					</div>
+					<input class="col-sm-2 input-group-sm" type="number" id="minMaxInput" value="0"
+								 data-decimals="{{ decimals }}" min="{{ minInput }}" max="{{ maxInput }}" step="{{ step }}"/>
+			</div>
+
+			<div class="form-group form-check">
+				<input type="checkbox"  class="form-check-input" id="showLine">
+				<label class="form-check-label" for="showLine">Use a line to remove isolated points</label>
+			</div>
+			<div class="form-group" id="lineTrunc" style="display: none">
+				<div class="form-group">
+					<label for="x1">x1</label>
+					<input type="input" name="x1" id="x1" />
+					<label for="y1">y1</label>
+					<input type="input" name="y1" id="y1" />
+				</div>
+				<div class="form-group">
+					<label for="x2">x2</label>
+					<input type="input" name="x2" id="x2" />
+					<label for="y2">y2</label>
+					<input type="input" name="y2" id="y2" />
+				</div>
+				<div class="form-group">
+					<div class="custom-control custom-radio custom-control-inline">
+						<input type="radio" class="custom-control-input" id="below" name="lineselect" value='below' checked>
+							<label class="custom-control-label" for="below">Remove Noise <font color="red">Below</font> Line</label>
+					</div>
+					<div class="custom-control custom-radio custom-control-inline">
+						<input type="radio" class="custom-control-input" id="above" name="lineselect" value='above' >
+						<label class="custom-control-label" for="above">Remove Noise <font color="red">Above</font> Line</label>
+					</div>
+				</div>
+				<div class="form-group">
+					<!--<button id="rm-isolate-noise" class="btn btn-default" type="button" disabled>Remove Isolated Noise</button>-->
+                                        <button id="rm-isolate-noise" class="btn btn-default" type="button">Remove Isolated Noise</button>
+				</div>
+			</div>
+			<div class="form-group">
+				<a href="{{ url_for('download_file') }}">Download</a>
+			</div>
+			<div class="form-group">
+				<label for="distance">Distance</label>
+				<input type="input" name="distance" id="distance" value="0.3755"/>
+				<label for="gamma">$\gamma$</label>
+				<input type="input" name="gamma" id="gamma" value="1.0016211"/>
+				<br>
+				<button id="twiss" class="btn btn-default" type="button" disabled>Calculate Twiss Paramters</button>
+			</div>
+		</form>
+		</div>
+		<div class="col-sm-6">
+			<form>
+				<div class="form-row">
+					<div class="col-sm-2 form-group">
+						<label for="partType" class="col-form-label">Particle</label>
+						<select class="form-control" id="partType">
+							<option value="PROTON">H+</option>
+							<option value="HE3PLUS">3He2+</option>
+							<option value="HE4PLUS">4He2+</option>
+						</select>
+					</div>
+					<div class="col-sm-2 form-group">
+						<label for="current" class="col-form-label">Current(mA)</label>
+						<input type="text" class="form-control" id="current" value="1">
+					</div>
+					<div class="col-sm-2 form-group">
+						<label for="gm" class="col-form-label">$\gamma$</label>
+						<input type="text" class="form-control" id="gm" value="1.0016211">
+					</div>
+					<div class="col-sm-2 form-group">
+						<label for="partNum" class="col-form-label">Particle Nbr</label>
+						<input type="text" class="form-control" id="partNum" value="100000">
+					</div>
+				</div>
+
+				<div class="form-row">
+					<div class="col-sm-3 form-group">
+						<label for="emitx" class="col-form-label">Emit. XXp ($\pi mm.mrad$)</label>
+						<input type="text" class="form-control" id="emitx" value="0.25">
+					</div>
+					<div class="col-sm-3 form-group">
+						<label for="alpx" class="col-form-label">$\alpha_x$ </label>
+						<input type="text" class="form-control" id="alpx" value="-0.3">
+					</div>
+					<div class="col-sm-3 form-group">
+						<label for="betx" class="col-form-label">$\beta_x (mm/\pi mrad)$ </label>
+						<input type="text" class="form-control" id="betx" value="0.4">
+					</div>
+				</div>
+
+				<div class="form-row">
+					<div class="col-sm-3 form-group">
+						<label for="emity" class="col-form-label">Emit. YYp ($\pi mm.mrad$)</label>
+						<input type="text" class="form-control" id="emity" value="0.25">
+					</div>
+					<div class="col-sm-3 form-group">
+						<label for="alpy" class="col-form-label">$\alpha_y$ </label>
+						<input type="text" class="form-control" id="alpy" value="0.3">
+					</div>
+					<div class="col-sm-3 form-group">
+						<label for="bety" class="col-form-label">$\beta_y (mm/\pi mrad)$ </label>
+						<input type="text" class="form-control" id="bety" value="0.4">
+					</div>
+				</div>
+
+				<div class="form-row">
+					<div class="col-sm-3 form-group">
+						<label for="q1" class="col-form-label">Q1 (A)</label>
+						<input type="text" class="form-control" id="q1" value="95">
+					</div>
+					<div class="col-sm-3 form-group">
+						<label for="q2" class="col-form-label">Q2 (A)</label>
+						<input type="text" class="form-control" id="q2" value="70">
+					</div>
+					<div class="col-sm-3 form-group">
+						<label for="q3" class="col-form-label">Q3 (A)</label>
+						<input type="text" class="form-control" id="q3" value="35">
+					</div>
+				</div>
+				<div class="form-group">
+					<button id="directRecst" class="btn btn-default" type="button">RFQ Twiss Parameters</button>
+				</div>
+			</form>
+		</div>
+	</div>
+	<button id="docs" class="btn btn-default" type="button">Manual</button>
+	<div id="manual" style="display: none">
+		<p>该网页是用于处理直接发射度测量的数据。上传处理数据，一次一个发射度数据。</p>
+		<p>Noise Remove按钮是将噪声做高斯拟合，将高斯拟合的最大值以下的信号全认为是噪声而删除，
+			然后将剩余信号整体扣除高斯期望值。</p>
+		<p>User Defined Noise Truncation由用户自己定义噪声阈值，该值可以手动输入或是用调节按钮改变。
+			调节范围，步长和小数位都可以自己定义。</p>
+		<p>Use a line to remove isolated points的应用场合是，当出现信号较强的孤立点时，
+			使用两点定义的直线来删除直线下面的点或上面的点。</p>
+		<p>处理完成后可以下载经处理的发射度数据。</p>
+		<p>Distance定义缝和丝的距离，gamma定义洛伦茨因子，计算Twiss参数需要。</p>
+		<p>网页右半页是根据MEBT缝处的横向Twiss参数反推RFQ出口Twiss参数，利用的是TraceWin粒子反向模拟功能。</p>
+	</div>
+	<div class="alert alert-info">
+	</div>
+	{% if if_exist %}
+	<div id="show_area"><img src="{{ graph }}"></img></div>
+	{% endif %}
+</div>
+{% endblock %}

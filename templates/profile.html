@@ -1,0 +1,178 @@
+{% extends "bootstrap/base.html" %}
+{% block styles %}
+{{ super() }}
+{% endblock %}
+{% block scripts %}
+{{ super() }}
+{{ moment.include_moment() }}
+<script>
+$("#median").click(function() {
+    $.ajax({
+        type: "GET",
+        url: "/medianize",
+        xhrFields: { withCredentials: true },
+        beforeSend: function() {
+            $("#median").prop('disabled', true);
+        },
+        success: function(result) {
+            $("img").attr('src', result);
+            $("#rm-noise").prop('disabled', false);
+        },
+    })
+});
+
+$("#rm-noise").click(function() {
+    $.ajax({
+        type: "POST",
+        url: "/rm-profile-noise",
+        data: {
+		    rm_noise_method: $('input:checked').val(),
+            mono_points: $('#monotone').val(),
+        },
+        xhrFields: { withCredentials: true },
+        beforeSend: function() {
+            $("#rm-noise").prop('disabled', true);
+        },
+        success: function(result) {
+            $("img").attr('src', result);
+            $("#run-task").prop('disabled', false);
+			$("#download").prop('disabled', false);
+        },
+    })
+});
+
+$("#docs").on("click", function () {
+	$("#manual").toggle();
+});
+
+$('#run-task').click(function() {
+    $.ajax({
+        type: 'POST',
+        url: '/longtask',
+	data: {
+            current: $('#current').val(),
+            particleType: $('#partType').val(),
+            section: $('#section').val(),
+	},
+        beforeSend: function() {
+            $('.alert').removeClass('d-none');
+            $("#run-task").prop('disabled', true);
+        },
+        success: function(data, status, request) {
+            status_url = request.getResponseHeader('Location');
+            update_progress(status_url);
+        },
+        error: function() {
+            alert('Unexpected error');
+        }
+    })
+});
+
+function update_progress(status_url) {
+    $.getJSON(status_url, function(data) {
+        if ((data['state'] != 'PENDING') && ('result' in data)) {
+                // show result
+                $('.alert').text('Success');
+        }
+        else {
+            setTimeout(function() {
+                var today = new Date();
+								var hour = today.getHours();
+								var mins = today.getMinutes();
+								var secs = today.getSeconds();
+								if (secs <= 9) {
+										secs = "0" + secs
+								}
+								var TotalTime = hour + ":" + mins + ":" + secs;
+										$('.alert').text(TotalTime + ' Progressing...');
+										update_progress(status_url);
+								}, 10000);
+				}
+    });
+}
+</script>
+{% endblock %}
+{% block content %}
+<div class="container-fluid">
+	<h2 style="text-align: center">Profiles Process and Emittance Reconstruction</h2>
+	<form>
+			<div class="form-group">
+					<a href="{{ url_for('upload_file', kind='profile') }}">Upload profiles</a>
+			</div>
+			<div class="form-group">
+				{% if disable_rm_btn %}
+					<input type="button" id="median" value="Median" disabled>
+				{% else %}
+					<input type="button" id="median" value="Median" enabled>
+				{% endif %}
+			</div>
+			<div class="form-group">
+				<h5>Noise reduce</h5>
+				<div class="form-group">
+					<div class="radio">
+						<label><input type="radio" name="optradio" checked value="0">Gauss Fit</label>
+					</div>
+					<div class="radio">
+						<label><input type="radio" name="optradio" value="1">3rms</label>
+					</div>
+					<div class="radio form-inline">
+						<label><input type="radio" name="optradio" value="2">Continuous Increase/Descrease</label>
+						<input id="monotone" type="text" style="margin-left: 5px" class="form-control" value="7"/>
+					</div>
+				</div>
+			</div>
+			<div class="form-group">
+				<span class="input-group-btn">
+					<button id="rm-noise" class="btn btn-default" type="button" disabled>Remove Noise</button>
+					<a href="{{ url_for('download_file') }}" disabled>Download</a>
+				</span>
+			</div>
+			<div class="form-group">
+				<div class="form-inline">
+					<label for="current" class="col-form-label">current (mA)</label>
+					<input type="text" class="form-control ml-1" id="current" value="1.0">
+				</div>
+			</div>
+			<div class="form-group">
+				<div class="form-inline">
+					<label for="partType" class="col-form-label">Particle</label>
+					<select class="form-control ml-1" id="partType">
+						<option value="PROTON">H+</option>
+						<option value="HE3PLUS">3He2+</option>
+						<option value="HE4PLUS">4He2+</option>
+					</select>
+				</div>
+			</div>
+			<div class="form-group">
+				<div class="form-inline">
+					<label for="section" class="col-form-label">Section</label>
+					<select class="form-control ml-1" id="section">
+						<option value="mebt">MEBT</option>
+						<option value="hebt">HEBT</option>
+					</select>
+				</div>
+			</div>
+			<div class="form-group">
+				<button id="run-task" class="btn btn-default" type="button" disabled>Run</button>
+				<a href="{{ url_for('downloadDistrubute') }}" disabled>Download</a>
+			</div>
+	</form>
+	<button id="docs" class="btn btn-default" type="button">Manual</button>
+	<div id="manual" style="display: none">
+		<p>该网页是用于处理剖面测量的数据。一次上传所有剖面数据，
+			剖面文件名定义方式为x_q1_q2_q3_1, x_q1_q2_q3_2, ...和y_q1_q2_q3_1, y_q1_q2_q3_2, ...，
+			分别对应水平和垂直的多组重复测量剖面。即使每个lattice只测量一次剖面，也需将名字命名成x_q1_q2_q3_1。
+			q1, q2和q3为MEBT的前三个四极铁电流，全为正值。
+		</p>
+		<p>median按钮取多组剖面中位数。噪声处理取缺省的高斯拟合就可以。</p>
+		<p>Run按钮是根据处理后的剖面重构RFQ出口分布；两个下载按钮分别下载处理后的剖面和重构的分布。</p>
+		<p>重构需要一定时间，网页最下状态栏显示“success”表示重构已完成。</p>
+	</div>
+	<div class="alert alert-info d-none">
+	</div>
+
+	{% if if_exist %}
+	<div id="show_area"><img src="{{ graph }}"></img></div>
+</div>
+{% endif %}
+{% endblock %}
